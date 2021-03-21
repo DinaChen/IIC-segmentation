@@ -4,6 +4,7 @@ import torch
 from torchvision import transforms,datasets
 import torchvision.transforms as tvt
 from PIL import Image
+from PIL import ImageOps
 import os
 from pathlib import Path
 import shutil
@@ -38,11 +39,11 @@ def scaleImagesFile():
         path = from_data_dir + imageId
         image = cv2.imread(path, cv2.IMREAD_COLOR)#.astype(np.uint8)
         scaledImage = scale_by(image, scalar)
-        desName = to_data_dir + str(imageId)
-        cv2.imwrite(desName, scaledImage)
+        saveAs = to_data_dir + str(imageId)
+        cv2.imwrite(saveAs, scaledImage)
 
 # crop every image in from_data_dir and save in folder to_data_dir
-def croppedImagesFile():
+def croppImagesFile():
 
     from_data_dir = 'val2017/bears/scaledBears/'
     to_data_dir = 'val2017/bears/croppedBears/'
@@ -53,14 +54,29 @@ def croppedImagesFile():
         path = from_data_dir + imageId
         image = Image.open(path)
         croppedImage = centerCrop(image)
-        desName = to_data_dir + str(imageId)
-        croppedImage.save(desName)
+        saveAs = to_data_dir + str(imageId)
+        croppedImage.save(saveAs)
+
+# flip every image in from_data_dir and save in folder to_data_dir
+def flipImageFile():
+
+    from_data_dir = 'val2017/bears/croppedBears/'
+    to_data_dir = 'val2017/bears/flippedBears/'
+
+    for imageId in os.listdir(from_data_dir):
+        path = from_data_dir + imageId
+        flippedImage = ImageOps.mirror(Image.open(path))
+        saveAs = to_data_dir + str(imageId)
+        flippedImage.save(saveAs)
 
 
 def main():
-
-    scaleImagesFile()
-    croppedImagesFile()
+    #im = Image.open("val2017/bears/croppedBears/000000073118.jpg")
+    #i = ImageOps.mirror(Image.open('val2017/bears/croppedBears/000000073118.jpg'))
+    #i.show()
+    #scaleImagesFile()
+    #cropImagesFile()
+    flipImageFile()
 
 main()
 
