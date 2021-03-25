@@ -22,8 +22,6 @@ jitter_brightness = 0.4
 # "For both COCO datasets, input images are shrunk
 # by two thirds and cropped to 128 × 128 pixels, 128 * 128"
 
-# image is an numpy.ndarray 640 586 3
-#Tensor Image is a tensor with (C, H, W) shape, where C is a number of channels, H and W are image height and width.
 
 ###################### Transformation G  ##############
 # horizontal flip
@@ -70,6 +68,8 @@ def croppImagesFile():
         saveAs = to_data_dir + str(imageId)
         croppedImage.save(saveAs)
 
+
+# implemented in PotsdamData.py, ignore here
 # flip every image in from_data_dir and save in folder to_data_dir
 def flipImageFile():
 
@@ -81,6 +81,7 @@ def flipImageFile():
         flippedImage = ImageOps.mirror(Image.open(path))
         saveAs = to_data_dir + str(imageId)
         flippedImage.save(saveAs)
+
 
 # perform color transformation for every image in from_data_dir and save in folder to_data_dir
 # jitter: brightness, contrast, saturation, hue, parameters same as in original IIC code
@@ -131,8 +132,7 @@ def sobel():
     # print(sol.shape)
 
 def main():
-    print('hi')
-
+    print("hi")
 
 main()
 
