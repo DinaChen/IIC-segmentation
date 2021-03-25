@@ -1,8 +1,10 @@
 import numpy as np
 import cv2
 import torch
+import torch.nn as nn
 from torchvision import transforms,datasets
 import torchvision.transforms as tvt
+from torch.autograd import Variable
 from PIL import Image
 from PIL import ImageOps
 import os
@@ -46,7 +48,7 @@ def scaleImagesFile():
     to_data_dir = 'val2017/bears/scaledBears/'
 
     for imageId in os.listdir(from_data_dir):
-        print(imageId)
+        #print(imageId)
         path = from_data_dir + imageId
         image = cv2.imread(path, cv2.IMREAD_COLOR)#.astype(np.uint8)
         scaledImage = scale_by(image, scalar)
@@ -59,7 +61,7 @@ def croppImagesFile():
     from_data_dir = 'val2017/bears/scaledBears/'
     to_data_dir = 'val2017/bears/croppedBears/'
 
-    centerCrop = tvt.transforms.CenterCrop(128)
+    centerCrop = tvt.transforms.CenterCrop(200)
 
     for imageId in os.listdir(from_data_dir):
         path = from_data_dir + imageId
@@ -96,20 +98,44 @@ def colorJitterImageFile():
         saveAs = to_data_dir + str(imageId)
         jitteredImage.save(saveAs)
 
+# probably wont be used anymore
+def sobel():
+
+    image = cv2.imread('val2017/bears/bears/000000044068.jpg', cv2.IMREAD_COLOR)  # .astype(np.uint8)
+    print(image.shape)
+
+    sobel_x = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
+    sobel_y = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
+
+    absx = np.absolute(sobel_x)
+    absy = np.absolute(sobel_y)
+
+    sobelx = np.uint8(absx)
+    sobely = np.uint8(absy)
+
+    # blend them
+    #sobelxy = cv2.addWeighted(sobelx, 0.5, sobely, 0.5, 0)
+
+    print(sobelx)
+
+    #cat = torch.cat([torch.from_numpy(sobelx), torch.from_numpy(sobely)], dim=1)
+    #print(cat.shape)
+    cv2.imshow('x', sobelx)
+
+    # cv2.imshow('sobelx', sobelx)
+    # cv2.imshow('sobely', sobely)
+    # cv2.imshow('blend', grad)
+
+    cv2.waitKey(0)
+    # sol = sobel_process( torch.from_numpy(image),True,False)
+    # print(sol.shape)
+
 def main():
-    colorJitterImageFile()
-    #im = Image.open("val2017/bears/croppedBears/000000073118.jpg")
-    #i = ImageOps.mirror(Image.open('val2017/bears/croppedBears/000000073118.jpg'))
-    #i.show()
-    #scaleImagesFile()
-    #cropImagesFile()
-    #flipImageFile()
-    #colorJitter = tvt.transforms.ColorJitter(jitter_brightness, jitter_contrast, jitter_saturation, jitter_hue)
-    #jitImage = colorJitter(im)
-    #im.show()
-    #jitImage.show()
+    print('hi')
+
 
 main()
+
 
     #pre_transform = transforms.Compose([#transforms.Resize(255),
     #                                transforms.CenterCrop(128),

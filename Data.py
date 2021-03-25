@@ -8,21 +8,17 @@ def readFile(fileName):
     id_list = idFile.read().splitlines()  # puts the file into an array
     idFile.close()
 
-    #print(id_list)
-    #print(len(id_list))
-
     return id_list
 
 def main():
 
     # read ids.txt as a list
-    ids_list = readFile('val2017/ids.txt')
+    idstxt_path = ''                         #for example :'val2017/ids.txt'
+    ids_list = readFile(idstxt_path)
 
     # copy the image with id in ids_list to folder selectedData
-    dataset = 'val2017/valdata'
-    selectedData = 'val2017/bears'
-
-    #print(ids_list)
+    dataset = ''
+    selectedData = ''
 
     for filename in os.listdir(dataset):
 
@@ -30,10 +26,8 @@ def main():
         name = Path(filename).with_suffix('')
 
         if str(name) in ids_list:
-            #print(name)
-            #print(filename)
-            path = 'val2017/valdata/'+str(filename)
-            shutil.copy(path, 'val2017/bears')
+            path = dataset+str(filename)
+            shutil.copy(path, selectedData)
         else:
             continue
 
