@@ -22,13 +22,12 @@ class Potsdam(VisionDataset):
         path = self.root + self.images[index]
         image = cv2.imread(path,cv2.IMREAD_COLOR).astype(np.uint8)
 
-       # image = Image.open(path).convert('RGB')
+        image = Image.fromarray((image))#Transform npArray to PIL
 
         if self.transforms:
-                image = self.transforms(Image.fromarray(image))
 
+            image = self.transforms(image)
 
-        # turn PIL to tensor
         return  torchvision.transforms.functional.pil_to_tensor(image)
 
 
@@ -37,8 +36,10 @@ class Potsdam(VisionDataset):
 
 # The 3 transformation functions
 def flip(image):
-    image = ImageOps.mirror(image)
-    return np.asarray(image)
+
+    image = ImageOps.mirror(image) #image type: PIL
+
+    return image
 
 def colorJitter(image):
 
@@ -50,7 +51,8 @@ def colorJitter(image):
 
     collorJitter = tvt.transforms.ColorJitter(brightness, contrast, saturation, hue)
     image = collorJitter(image)
-    return np.asarray(image)
+
+    return image
 
 def randomCrop(image):
 
@@ -60,12 +62,16 @@ def main():
 
     # path of (scaled and cropped) data
     potsdam_preprocessed = 'val2017/bears/croppedBears/'
-
     batch_size = 5
+
+    # prepare Original  Dataset
+    potsdam_origin = Potsdam(root = potsdam_preprocessed)
+    potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
+    potsdam_origin_iter = iter(potsdam_origin_loader)
 
     # Prepare Flipped Dataset
     potsdam_flip = Potsdam(root = potsdam_preprocessed, transforms=flip)
-    potsdam_flip_loader = torch.utils.data.DataLoader(potsdam_flip, batch_size=batch_size, shuffle=False) #Do we need shuffle?
+    potsdam_flip_loader = torch.utils.data.DataLoader(potsdam_flip, batch_size=batch_size, shuffle=False)
     potsdam_flip_iter = iter(potsdam_flip_loader)
 
     # Prepare ColorJittered Dataset
@@ -80,13 +86,11 @@ def main():
 
 
 
-    for bn, batch in enumerate(potsdam_randomCrop_iter):
-        print('Batch No.: '+ str(bn))
-        print(batch.shape)
+  #  for bn, batch in enumerate(potsdam_flip_iter):
+  #      print('Batch No.: '+ str(bn))
+  #      print(batch.shape)
 
-
-
-       # for img in batch:
+       #for img in batch:
        #     cv2.imshow(str(bn), img.numpy())
        #     cv2.waitKey(0)
 

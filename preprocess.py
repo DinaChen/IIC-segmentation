@@ -132,7 +132,7 @@ def sobel():
     # print(sol.shape)
 
 def main():
-    print("hi")
+  croppImagesFile()
 
 main()
 
