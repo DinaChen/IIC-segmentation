@@ -16,12 +16,33 @@ from PotsdamData import flip,colorJitter,randomCrop
 potsdam_preprocessed = 'val2017/bears/croppedBears/'
 batch_size = 5
 displacements = ['N','S','E','W','NE','NW', 'SE','SW']
+n = 3  #for potsdam-3
+#n = 6 #for potsdam-6
 
 
-# matrix Pt as in equation5, avg over all pixels, images, and transformations
-def getPt():
+# equation 3
+def getInformation(matrixP):
 
     return 0
+
+
+# correspond to avgPt in equation 5, everaged over all displacements T.
+def getMatrixP(output_origin, output_flip, output_color, output_crop):
+
+    matrix = torch.zeros(n,n)
+    for displacement in displacements:
+
+        print(displacement)
+
+        transform1 = getImageAvgMatrix(output_origin, output_flip, displacement)
+        transform2 = getImageAvgMatrix(output_origin, output_color, displacement)
+        transform3 = getImageAvgMatrix(output_origin, output_crop, displacement)
+
+        transformAvgMatrix = (transform1 + transform2 + transform3) / 3;
+        matrix = matrix + transformAvgMatrix
+
+    matrix = matrix / len(displacements)
+    return matrix
 
 
 # input: a batch of origin images,
@@ -32,7 +53,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement):
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
 
-    matrix = torch.zeros(3, 3)
+    matrix = torch.zeros(n, n)
 
     for id in range(amountImage):
         image_x = originBatch[id]
@@ -60,21 +81,21 @@ def getPixelMatrixP(origin, transformed,displacement):
     # create a new tensor,fill in pixel by pixel.
 
 
-    matrixPixels = torch.zeros(200,200,3,3)
+    matrixPixels = torch.zeros(200,200,n,n)
     matrixP = avgThePixels(matrixPixels)
 
-    return torch.zeros(3,3)
+    return torch.zeros(n,n)
     #return matrixP
 
 
 # input: matrixP shape[(200,200,3,3)] or [(200,200,6,6)]
 # average over all pixels
-# output: matrix shape [(3,3)]
+# output: matrix shape [(3,3)] or [(6,6)]
 def avgThePixels(matrixPixels):
 
 
 
-    matrix = torch.zeros(3,3)
+    matrix = torch.zeros(n,n)
     return
 
 # look for what is correct displacement
@@ -119,30 +140,31 @@ def getDataIterators():
 def main():
 
     origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
-    printBatchInfo(origin_iter)
+    #printBatchInfo(origin_iter)
+
+    # Train the model batch by batch
+    if(origin_iter.hasNext()):   ##right？
+
+        ## Data for one Batch
+        batch_origin = next(origin_iter)
+        batch_flip = next(flip_iter)
+        batch_color = next(color_iter)
+        batch_crop = next(crop_iter)
+
+        ## concat them and feed into Model
 
 
-
-
-    # Assume, output of the model has shape:  [4 * batchSize, 200,200,3]
+    # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
+    # Assume: output of the model has shape:  [4 * batchSize, 200,200,n]
     # divide them back to the four group: original, flipped, colorChanged, Cropped
     # dummies ~
-    output_origin = torch.zeros(batch_size,200,200,3)
-    output_colorJitter = torch.zeros(batch_size,200,200,3)
-    output_flip = torch.zeros(batch_size,200,200,3)
-    output_randomCrop = torch.zeros(batch_size,200,200,3)
+    output_origin = torch.zeros(batch_size,200,200,n)
+    output_color = torch.zeros(batch_size,200,200,n)
+    output_flip = torch.zeros(batch_size,200,200,n)
+    output_crop = torch.zeros(batch_size,200,200,n)
 
-
-
-
-
-
-
-
-
-
-
-
+    matrixP = getMatrixP(output_origin, output_flip, output_color, output_crop)
+    information = getInformation(matrixP)
 
 
 

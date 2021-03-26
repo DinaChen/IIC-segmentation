@@ -84,11 +84,11 @@ def main():
     potsdam_randomCrop_loader = torch.utils.data.DataLoader(potsdam_randomCrop, batch_size=batch_size, shuffle=False)
     potsdam_randomCrop_iter = iter(potsdam_randomCrop_loader)
 
+    batch_origin = next(potsdam_origin_iter)
+    batch_flip = next(potsdam_flip_iter)
 
+    # print(len(potsdam_randomCrop_loader)) #get amount of batch
 
-  #  for bn, batch in enumerate(potsdam_flip_iter):
-  #      print('Batch No.: '+ str(bn))
-  #      print(batch.shape)
 
        #for img in batch:
        #     cv2.imshow(str(bn), img.numpy())
