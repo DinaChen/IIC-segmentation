@@ -20,6 +20,22 @@ n = 3  #for potsdam-3
 #n = 6 #for potsdam-6
 
 
+#not sure yet what the ouput from model looks
+def getLoss():
+
+    # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
+    # Assume: output of the model has shape:  [4 * batchSize, 200,200,n]
+    # divide them back to the four group: original, flipped, colorChanged, Cropped
+    # dummies ~
+    output_origin = torch.zeros(batch_size, 200, 200, n)
+    output_color = torch.zeros(batch_size, 200, 200, n)
+    output_flip = torch.zeros(batch_size, 200, 200, n)
+    output_crop = torch.zeros(batch_size, 200, 200, n)
+
+    matrixP = getMatrixP(output_origin, output_flip, output_color, output_crop)
+    information = getInformation(matrixP)
+
+
 # equation 3
 def getInformation(matrixP):
 
@@ -97,8 +113,16 @@ def avgThePixels(matrixPixels):
 
     matrix = torch.zeros(n,n)
     return
+############################### Helper Functions #################################
 
-# get corresponding pixel coordinate (h,w) of the transformed image, given the displacmenet type.
+#get corresponding pixel coordinate (h,w) for a horizontally flipped image
+def flipCoordinate(pixel):
+
+    h,w = pixel
+    return (h, 199-w)
+
+# get corresponding pixel coordinate (h,w) for the transformed image, given the displacmenet type.
+# 'u+t' in equation 5 in IIC paper
 def getDisplacement(pixel, displacement):
 
     h,w = pixel
@@ -156,29 +180,13 @@ def getDataIterators():
 
     return origin_iter, flip_iter, color_iter, crop_iter
 
-#not sure yet what the ouput from model looks
-def getLoss():
-
-    # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
-    # Assume: output of the model has shape:  [4 * batchSize, 200,200,n]
-    # divide them back to the four group: original, flipped, colorChanged, Cropped
-    # dummies ~
-    output_origin = torch.zeros(batch_size, 200, 200, n)
-    output_color = torch.zeros(batch_size, 200, 200, n)
-    output_flip = torch.zeros(batch_size, 200, 200, n)
-    output_crop = torch.zeros(batch_size, 200, 200, n)
-
-    matrixP = getMatrixP(output_origin, output_flip, output_color, output_crop)
-    information = getInformation(matrixP)
 
 def main():
 
-    h = getDisplacement((199,199),'upright')
-    print(h)
+   print(flipCoordinate((199, 199)))
 
 
-
-    origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
+    #origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
     #printBatchInfo(origin_iter)
 
     # Train the model batch by batch
