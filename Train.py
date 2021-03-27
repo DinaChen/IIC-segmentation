@@ -20,8 +20,8 @@ n = 3  #for potsdam-3
 #n = 6 #for potsdam-6
 
 
-#not sure yet what the ouput from model looks
-def getLoss():
+# its temporary, because we dont have the output yet.
+def getLoss_temp():
 
     # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
     # Assume: output of the model has shape:  [4 * batchSize, 200,200,n]
@@ -32,8 +32,8 @@ def getLoss():
     output_flip = torch.zeros(batch_size, 200, 200, n)
     output_crop = torch.zeros(batch_size, 200, 200, n)
 
-    matrixP = getMatrixP(output_origin, output_flip, output_color, output_crop)
-    information = getInformation(matrixP)
+    matrixP = getLoss(output_origin, output_flip, output_color, output_crop)
+
 
 
 # equation 3
@@ -42,23 +42,29 @@ def getInformation(matrixP):
     return 0
 
 
-# correspond to avgPt in equation 5, everaged over all displacements T.
-def getMatrixP(output_origin, output_flip, output_color, output_crop):
+# Equation 5, objective function
+# for each displacement, calculate the matrix, which is averaged over 3 transformations
+# calculate the loss, then average over the displacements.
+def getLoss(output_origin, output_flip, output_color, output_crop):
 
-    matrix = torch.zeros(n,n)
+    totalLoss = 0
+
     for displacement in displacements:
 
+        #There are 8 displacements
         print(displacement)
 
-        transform1 = getImageAvgMatrix(output_origin, output_flip, displacement)
-        transform2 = getImageAvgMatrix(output_origin, output_color, displacement)
-        transform3 = getImageAvgMatrix(output_origin, output_crop, displacement)
+        transform1 = getImageAvgMatrix(output_origin, output_flip, displacement, 'flip')
+        transform2 = getImageAvgMatrix(output_origin, output_color, displacement, 'color')
+        transform3 = getImageAvgMatrix(output_origin, output_crop, displacement, 'crop')
 
         transformAvgMatrix = (transform1 + transform2 + transform3) / 3;
-        matrix = matrix + transformAvgMatrix
+        loss = getInformation(transformAvgMatrix)
+        totalLoss = totalLoss + loss
 
-    matrix = matrix / len(displacements)
-    return matrix
+    avgLoss = totalLoss / 8
+
+    return avgLoss
 
 
 # input: a batch of origin images,
@@ -66,7 +72,7 @@ def getMatrixP(output_origin, output_flip, output_color, output_crop):
 #        displacement type(string)
 #        type of transformation
 # output: 3*3 (potsdam few) or 6*6(potsdam full) matrix, avg over all images in batch.
-def getImageAvgMatrix(originBatch, transformedBatch, displacement):
+def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType):
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
 
@@ -74,7 +80,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement):
         image_x = originBatch[id]
         image_gx = transformedBatch[id]
 
-        imageMatrix = getPixelMatrixP(image_x, image_gx, displacement)
+        imageMatrix = getPixelMatrixP(image_x, image_gx, displacement, transformType)
         matrix = torch.add(matrix, imageMatrix)
 
     imageAvgMatrix = torch.div(matrix, amountImage)
@@ -228,30 +234,19 @@ def getDataIterators():
 
 def main():
 
-    ## dummy output, 2 by 2 pixel image, 2 classes
-   output = torch.tensor([[[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
-                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
-                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]]])
-
-   output2 = torch.tensor([[[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
-                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
-                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]]])
-
-   p = getPixelMatrixP(output, output2, 'downright', 'color')
-
-
-
-    #origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
+    origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
     #printBatchInfo(origin_iter)
 
     # Train the model batch by batch
-    #if(origin_iter.hasNext()):   ##right？
+    if(origin_iter.hasNext()):   ##right？
 
         ## Data for one Batch
-     #   batch_origin = next(origin_iter)
-     #   batch_flip = next(flip_iter)
-     #   batch_color = next(color_iter)
-     #   batch_crop = next(crop_iter)
+        batch_origin = next(origin_iter)
+        batch_flip = next(flip_iter)
+        batch_color = next(color_iter)
+        batch_crop = next(crop_iter)
+        input = torch.cat(batch_origin, batch_flip, batch_color, batch_crop )
+        print(input.size)
 
         ## concat them and feed into Model
 
