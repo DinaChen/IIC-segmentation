@@ -15,7 +15,7 @@ from PotsdamData import flip,colorJitter,randomCrop
 
 potsdam_preprocessed = 'val2017/bears/croppedBears/'
 batch_size = 5
-displacements = ['N','S','E','W','NE','NW', 'SE','SW']
+displacements = ['up','down','left','right','upright','upleft','downright','downleft']
 n = 3  #for potsdam-3
 #n = 6 #for potsdam-6
 
@@ -98,13 +98,33 @@ def avgThePixels(matrixPixels):
     matrix = torch.zeros(n,n)
     return
 
-# look for what is correct displacement
-def getDisplacement(pixel, displacement, movedPixel):
+# get corresponding pixel coordinate (h,w) of the transformed image, given the displacmenet type.
+def getDisplacement(pixel, displacement):
 
-    # consider when displacement is not possible, out of range 0-200
+    h,w = pixel
+    move_h, move_w = getDirection(displacement)
+    new_h = h + move_h
+    new_w = w + move_w
 
-    return (0,0)
+    # when displacement is not possible: out of range 0-200, then not move.
+    if(new_h < 0 or new_h>199):
+        new_h = h
+    if (new_w < 0 or new_w > 199):
+        new_w = w
 
+    return (new_h, new_w)
+
+def getDirection(x):
+    return {
+        'up': (-1,0),
+        'down': (1,0),
+        'left':(0,-1),
+        'right':(0,1),
+        'upright':(-1,1),
+        'upleft':(-1,-1),
+        'downright':(1,1),
+        'downleft':(1,-1),
+    }[x]
 
 def printBatchInfo(iter):
     for bn, batch in enumerate(iter):
@@ -136,35 +156,46 @@ def getDataIterators():
 
     return origin_iter, flip_iter, color_iter, crop_iter
 
-
-def main():
-
-    origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
-    #printBatchInfo(origin_iter)
-
-    # Train the model batch by batch
-    if(origin_iter.hasNext()):   ##right？
-
-        ## Data for one Batch
-        batch_origin = next(origin_iter)
-        batch_flip = next(flip_iter)
-        batch_color = next(color_iter)
-        batch_crop = next(crop_iter)
-
-        ## concat them and feed into Model
-
+#not sure yet what the ouput from model looks
+def getLoss():
 
     # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
     # Assume: output of the model has shape:  [4 * batchSize, 200,200,n]
     # divide them back to the four group: original, flipped, colorChanged, Cropped
     # dummies ~
-    output_origin = torch.zeros(batch_size,200,200,n)
-    output_color = torch.zeros(batch_size,200,200,n)
-    output_flip = torch.zeros(batch_size,200,200,n)
-    output_crop = torch.zeros(batch_size,200,200,n)
+    output_origin = torch.zeros(batch_size, 200, 200, n)
+    output_color = torch.zeros(batch_size, 200, 200, n)
+    output_flip = torch.zeros(batch_size, 200, 200, n)
+    output_crop = torch.zeros(batch_size, 200, 200, n)
 
     matrixP = getMatrixP(output_origin, output_flip, output_color, output_crop)
     information = getInformation(matrixP)
+
+def main():
+
+    h = getDisplacement((199,199),'upright')
+    print(h)
+
+
+
+    origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
+    #printBatchInfo(origin_iter)
+
+    # Train the model batch by batch
+    #if(origin_iter.hasNext()):   ##right？
+
+        ## Data for one Batch
+     #   batch_origin = next(origin_iter)
+     #   batch_flip = next(flip_iter)
+     #   batch_color = next(color_iter)
+     #   batch_crop = next(crop_iter)
+
+        ## concat them and feed into Model
+
+    #when get output
+    #getLoss()
+
+
 
 
 
