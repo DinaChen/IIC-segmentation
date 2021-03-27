@@ -64,12 +64,11 @@ def getMatrixP(output_origin, output_flip, output_color, output_crop):
 # input: a batch of origin images,
 #        a batch of transformed image
 #        displacement type(string)
+#        type of transformation
 # output: 3*3 (potsdam few) or 6*6(potsdam full) matrix, avg over all images in batch.
 def getImageAvgMatrix(originBatch, transformedBatch, displacement):
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
-
-    matrix = torch.zeros(n, n)
 
     for id in range(amountImage):
         image_x = originBatch[id]
@@ -83,13 +82,50 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement):
     return imageAvgMatrix
 
 
+# Done
+# input: distribution of images: Φ（x) , Φ（gx）, shape ([200,200,3]) or ([200,200,6])
+# output: the matrix p (3*3) or (6,6), averaged over pixels for one image.
+#        type of transformation
+def getPixelMatrixP(origin, transformed, displacement, transformType):
 
-# input: distribution of images: Φ（x) , Φ（gx）,shape ([200,200,3]) or ([200,200,6])
-# output: the matrix p (3*3) or (6,6), averaged over pixels.
-def getPixelMatrixP(origin, transformed,displacement):
+    imgSize = origin.shape[0]
+    amountClass = origin.shape[2]
+    print(imgSize)
+    print(amountClass)
+
+    # for each pixel in original image, get corresponding pixel in the transformed image
+    # get their class distribution: phi_origin, phi_transformed
+
+    matrix = torch.zeros(amountClass, amountClass)
+
+    for h in range(0, imgSize):
+
+        for w in range (0, imgSize):
+
+            print('pixel: ' + str((h,w)))
+            phi_origin = origin[h][w]
+
+            new_h, new_w  = h,w
+            if(transformType == 'flip'):
+                new_h, new_w = flipCoordinate((h,w))
+            new_h, new_w = getDisplacement((new_h, new_w), displacement)
+            phi_transformed = transformed[new_h][new_w]
+
+            ## get matrix for these 2 pixels
+            matrix_hw = torch.outer(phi_origin, phi_transformed)
+
+            matrix = matrix + matrix_hw
+            print(matrix_hw)
+
+    print('total')
+    print(matrix)
+    amountPixel = imgSize*imgSize
+    #print(matrix/ amountPixel)
+
+    return matrix/amountPixel
+
 
     ##TODO
-    #for flip,  convert the coordinate, maybe create a function for it
     #for random crop, ??
     #for color, nothing
 
@@ -113,13 +149,20 @@ def avgThePixels(matrixPixels):
 
     matrix = torch.zeros(n,n)
     return
+
+
+
+
+
 ############################### Helper Functions #################################
+
 
 #get corresponding pixel coordinate (h,w) for a horizontally flipped image
 def flipCoordinate(pixel):
 
     h,w = pixel
     return (h, 199-w)
+
 
 # get corresponding pixel coordinate (h,w) for the transformed image, given the displacmenet type.
 # 'u+t' in equation 5 in IIC paper
@@ -131,12 +174,13 @@ def getDisplacement(pixel, displacement):
     new_w = w + move_w
 
     # when displacement is not possible: out of range 0-200, then not move.
-    if(new_h < 0 or new_h>199):
+    if(new_h < 0 or new_h > 2):
         new_h = h
-    if (new_w < 0 or new_w > 199):
+    if (new_w < 0 or new_w > 2):
         new_w = w
 
     return (new_h, new_w)
+
 
 def getDirection(x):
     return {
@@ -149,6 +193,7 @@ def getDirection(x):
         'downright':(1,1),
         'downleft':(1,-1),
     }[x]
+
 
 def printBatchInfo(iter):
     for bn, batch in enumerate(iter):
@@ -183,7 +228,17 @@ def getDataIterators():
 
 def main():
 
-   print(flipCoordinate((199, 199)))
+    ## dummy output, 2 by 2 pixel image, 2 classes
+   output = torch.tensor([[[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
+                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
+                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]]])
+
+   output2 = torch.tensor([[[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
+                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]],
+                          [[0.1,0.1, 0.8],[0.1,0.1, 0.8],[0.1,0.1, 0.8]]])
+
+   p = getPixelMatrixP(output, output2, 'downright', 'color')
+
 
 
     #origin_iter, flip_iter,color_iter,crop_iter = getDataIterators()
