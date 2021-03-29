@@ -10,6 +10,9 @@ from PIL import Image
 from PIL import ImageOps
 from PotsdamData import Potsdam
 from PotsdamData import flip,colorJitter,randomCrop
+import torch.nn as nn
+import torch.nn.functional as F
+from .vgg import VGGTrunk, VGGNet
 
 
 
@@ -88,7 +91,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType)
     return imageAvgMatrix
 
 
-# Done
+
 # input: distribution of images: Φ（x) , Φ（gx）, shape ([200,200,3]) or ([200,200,6])
 # output: the matrix p (3*3) or (6,6), averaged over pixels for one image.
 #        type of transformation
@@ -145,16 +148,6 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
     return torch.zeros(n,n)
     #return matrixP
 
-
-# input: matrixP shape[(200,200,3,3)] or [(200,200,6,6)]
-# average over all pixels
-# output: matrix shape [(3,3)] or [(6,6)]
-def avgThePixels(matrixPixels):
-
-
-
-    matrix = torch.zeros(n,n)
-    return
 
 
 
@@ -230,6 +223,27 @@ def getDataIterators():
     crop_iter = iter(potsdam_randomCrop_loader)
 
     return origin_iter, flip_iter, color_iter, crop_iter
+
+######################### Model ################################
+class SegmentationNet10aTrunk(VGGTrunk):
+  def __init__(self, config, cfg):
+    super(SegmentationNet10aTrunk, self).__init__()
+
+    self.batchnorm_track = config.batchnorm_track
+
+    assert (config.input_sz % 2 == 0)
+
+    self.conv_size = 3 #?
+    self.pad = 1       #?
+    self.cfg = cfg
+    self.in_channels = config.in_channels if hasattr(config, 'in_channels') \
+      else 3
+
+    self.features = self._make_layers()
+
+  def forward(self, x):
+    x = self.features(x)  # do not flatten
+    return x
 
 
 def main():
