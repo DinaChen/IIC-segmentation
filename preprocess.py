@@ -132,9 +132,11 @@ def sobel():
     # print(sol.shape)
 
 def main():
-  croppImagesFile()
+  #croppImagesFile()
 
-main()
+  # 33 48  11:16
+  #
+ main()
 
 
     #pre_transform = transforms.Compose([#transforms.Resize(255),

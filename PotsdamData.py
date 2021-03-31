@@ -24,16 +24,31 @@ class Potsdam(VisionDataset):
     def __getitem__(self, index):
 
         path = self.root + self.images[index]
-        #image = cv2.imread(path,cv2.IMREAD_COLOR).astype(np.uint8)
-        image = scipy.io.loadmat(path)['img']
 
-        image = Image.fromarray((image))#Transform npArray to PIL
+
+        # error : expecting scalar byte but get float
+
+        image = scipy.io.loadmat(path)['img'].astype(np.uint8)
+
+        # Transform npArray to PIL, needed for the transformation functions
+        image = Image.fromarray((image))
 
         if self.transforms:
 
             image = self.transforms(image)
 
-        return  torchvision.transforms.functional.pil_to_tensor(image)
+        #image.show()
+
+
+        # PIL to tensor, to byte tensor
+        tensor = torchvision.transforms.functional.pil_to_tensor(image).byte()
+
+        # wont work. np directly to tensor
+        #tensorFromNp = torch.tensor(image)
+        #order =  tensorFromNp.permute(2,0,1)
+        #print(order.shape)
+
+        return  tensor
 
 
     def __len__(self):
@@ -42,7 +57,7 @@ class Potsdam(VisionDataset):
 # The 3 transformation functions
 def flip(image):
 
-    image = ImageOps.mirror(image) #image type: PIL
+    image = ImageOps.mirror(image)  #image type: PIL
 
     return image
 
@@ -65,20 +80,20 @@ def randomCrop(image):
 
 def main():
 
-    # path of (scaled and cropped) data
+
     potsdamData = 'demo/'
     batch_size = 5
 
     # prepare Original  Dataset
-    potsdam_origin = Potsdam(root = potsdamData)
-    potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
-    potsdam_origin_iter = iter(potsdam_origin_loader)
+    #potsdam_origin = Potsdam(root = potsdamData)
+    #potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
+    #potsdam_origin_iter = iter(potsdam_origin_loader)
 
-    print(len(potsdam_origin_loader)) #get amount of batch
+    #print(len(potsdam_origin_loader)) #get amount of batch
 
-    for bn, batch in enumerate(potsdam_origin_iter):
-       print('Batch No.: ' + str(bn))
-       print(batch.shape)
+    #for bn, batch in enumerate(potsdam_origin_iter):
+    #   print('Batch No.: ' + str(bn))
+    #   print(batch.shape)
 
 
 
