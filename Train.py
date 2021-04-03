@@ -2,6 +2,7 @@ import os
 import numpy as np
 import cv2
 import torch
+torch.cuda.is_available()
 import torchvision
 import torchvision.transforms as tvt
 from torchvision.datasets.vision import VisionDataset
@@ -12,32 +13,16 @@ from PotsdamData import Potsdam
 from PotsdamData import flip,colorJitter,randomCrop
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 from vgg import VGGTrunk, VGGNet
 
 
 
 potsdam_preprocessed = 'val2017/bears/croppedBears/'
 batch_size = 5
-displacements = ['up','down','left','right','upright','upleft','downright','downleft']
-n = 3  #for potsdam-3
-#n = 6 #for potsdam-6
-
-
-# its temporary, because we dont have the output yet.
-def getLoss_temp():
-
-    # Now we have the output from the model of one batch, we want to calculate the information(loss) of this batch.
-    # Assume: output of the model has shape:  [4 * batchSize, 200,200, #classes]
-    # divide them back to the four group: original, flipped, colorChanged, Cropped
-    # dummies ~
-    output_origin = torch.zeros(batch_size, 200, 200, n)
-
-    output_color = torch.zeros(batch_size, 200, 200, n)
-    output_flip = torch.zeros(batch_size, 200, 200, n)
-    output_crop = torch.zeros(batch_size, 200, 200, n)
-
-    matrixP = getLoss(output_origin, output_flip, output_color, output_crop)
-
+displacements = ['up','down']#,'left','right'] #'upright','upleft','downright','downleft']
+#n = 3  #for potsdam-3
+n = 6 #for potsdam-6
 
 
 # equation 3
@@ -65,7 +50,7 @@ def getInformation(matrixP):
 
 # temperal! for trying to use the model
 
-def getLoss(output_origin, output_flip):
+def getLossT(output_origin, output_flip):
 
     totalLoss = 0
 
@@ -118,7 +103,11 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType)
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
 
+    matrix = torch.zeros(n, n)
+
     for id in range(amountImage):
+        print(id)
+
         image_x = originBatch[id]
         image_gx = transformedBatch[id]
 
@@ -138,8 +127,8 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
 
     imgSize = origin.shape[0]
     amountClass = origin.shape[2]
-    print(imgSize)
-    print(amountClass)
+    #print(imgSize)
+    #print(amountClass)
 
     # for each pixel in original image, get corresponding pixel in the transformed image
     # get their class distribution: phi_origin, phi_transformed
@@ -150,7 +139,7 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
 
         for w in range (0, imgSize):
 
-            print('pixel: ' + str((h,w)))
+            #print('pixel: ' + str((h,w)))
             phi_origin = origin[h][w]
 
             new_h, new_w  = h,w
@@ -163,10 +152,10 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
             matrix_hw = torch.outer(phi_origin, phi_transformed)
 
             matrix = matrix + matrix_hw
-            print(matrix_hw)
+            #print(matrix_hw)
 
-    print('total')
-    print(matrix)
+    #print('total')
+    #print(matrix)
     amountPixel = imgSize*imgSize
     #print(matrix/ amountPixel)
 
@@ -315,6 +304,18 @@ class SegmentationNet10a(VGGNet):
     x = self.head(x)
     return x
 
+def try_gpu():
+    """
+    If GPU is available, return torch.device as cuda:0; else return torch.device
+    as cpu.
+    """
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        print('cuda available')
+    else:
+        device = torch.device('cpu')
+        print('cuda unavailable')
+    return device
 
 # Temperal,
 def feedForward():
@@ -322,14 +323,14 @@ def feedForward():
     # printBatchInfo(origin_iter)
 
     # Train the model batch by batch
-    if (origin_iter.hasNext()):  ##right？
+    if (origin_iter.hasNext()):  ##right？  for...
 
         ## Data for one Batch
         batch_origin = next(origin_iter)
         batch_flip = next(flip_iter)
         batch_color = next(color_iter)
         batch_crop = next(crop_iter)
-        input = torch.cat(batch_origin, batch_flip, batch_color, batch_crop)
+
         print(input.size)
 
         # when get output
@@ -341,7 +342,7 @@ def main():
     potsdamData = 'demo/'
     batch_size = 5
 
-    # prepare Original  Dataset, 5 batches, 4 images/batch
+    # prepare Original  Dataset, 3 batches, 5 images per batch
     potsdam_origin = Potsdam(root=potsdamData)
     potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
     potsdam_origin_iter = iter(potsdam_origin_loader)
@@ -354,19 +355,24 @@ def main():
     sampleInput_origin = next(potsdam_origin_iter)
     sampleInput_flip = next(potsdam_flip_iter)
 
-    #printBatchInfo(potsdam_origin_iter)
-    #printBatchInfo(potsdam_flip_iter)
+    # create a model
+    segmentationModel = SegmentationNet10a().to(try_gpu())
 
-    segmentationModel = SegmentationNet10a()
-    sampleOutput = segmentationModel.forward(sampleInput_origin)
-    print(sampleOutput.shape)
+    # get output for different data set
+    originOutput = segmentationModel.forward(sampleInput_origin)[0].permute(0,2,3,1)
+    flipOutput = segmentationModel.forward(sampleInput_flip)[0].permute(0,2,3,1)
+    print(flipOutput.shape)
 
-    # Expect sampleOutput shape: [20, 200, 200, 1], {0,1,2,3,4,5}
-    # torch.split(tensor, split_size_or_sections, dim=0)
-    # torch.split(sampleOutput, 2, 0)
-    ## call getlosstemperal ()
+    # Expect sampleOutput shape: [20, 200, 200, 6]
 
+    # calculate the loss
+    loss = getLossT(originOutput, flipOutput)
+    print('loss: ' + str(loss))
 
+    loss.backward()
+    optimizer = optim.Adam(segmentationModel.parameters(), lr = 0.001)
+    optimizer.step()
+    print("done")
 
 
 

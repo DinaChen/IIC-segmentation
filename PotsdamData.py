@@ -41,7 +41,7 @@ class Potsdam(VisionDataset):
 
 
         # PIL to tensor, to byte tensor
-        tensor = torchvision.transforms.functional.pil_to_tensor(image).byte()
+        tensor = torchvision.transforms.functional.pil_to_tensor(image).float()
 
         # wont work. np directly to tensor
         #tensorFromNp = torch.tensor(image)
