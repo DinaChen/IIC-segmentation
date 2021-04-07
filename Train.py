@@ -10,7 +10,6 @@ import torchvision.transforms.functional as F
 from PIL import Image
 from PIL import ImageOps
 from PotsdamData import Potsdam
-from PotsdamData import flip,colorJitter,randomCrop
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -18,9 +17,9 @@ from vgg import VGGTrunk, VGGNet
 
 
 
-potsdam_preprocessed = 'val2017/bears/croppedBears/'
+potsdamData = 'demo/'
 batch_size = 5
-displacements = ['up','down']#,'left','right'] #'upright','upleft','downright','downleft']
+displacements = ['up']#'down','left','right','upright','upleft','downright','downleft']
 #n = 3  #for potsdam-3
 n = 6 #for potsdam-6
 
@@ -106,7 +105,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType)
     matrix = torch.zeros(n, n)
 
     for id in range(amountImage):
-        print(id)
+        print(id + 1)
 
         image_x = originBatch[id]
         image_gx = transformedBatch[id]
@@ -182,9 +181,9 @@ def getDisplacement(pixel, displacement):
     new_w = w + move_w
 
     # when displacement is not possible: out of range 0-200, then not move.
-    if(new_h < 0 or new_h > 2):
+    if(new_h < 0 or new_h > 199):
         new_h = h
-    if (new_w < 0 or new_w > 2):
+    if (new_w < 0 or new_w > 199):
         new_w = w
 
     return (new_h, new_w)
@@ -211,6 +210,8 @@ def printBatchInfo(iter):
 
 def getDataIterators():
 
+
+
     # prepare Original Dataset
     potsdam_origin = Potsdam(root=potsdam_preprocessed, transforms=None)
     potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
@@ -222,7 +223,7 @@ def getDataIterators():
     flip_iter = iter(potsdam_flip_loader)
 
     # Prepare ColorJittered Dataset
-    potsdam_color = Potsdam(root = potsdam_preprocessed, transforms=colorJitter)
+    potsdam_color = Potsdam(root = potsdam_preprocessed, transforms=jitter)
     potsdam_color_loader = torch.utils.data.DataLoader(potsdam_color, batch_size=batch_size, shuffle=False)
     color_iter = iter(potsdam_color_loader)
 
@@ -231,7 +232,7 @@ def getDataIterators():
     potsdam_randomCrop_loader = torch.utils.data.DataLoader(potsdam_randomCrop, batch_size=batch_size, shuffle=False)
     crop_iter = iter(potsdam_randomCrop_loader)
 
-    return origin_iter, flip_iter, color_iter, crop_iter
+    return origin_iter, flip_iter, color_iter, crop_iter, len(potsdam_origin_loader)
 
 
 
@@ -294,7 +295,7 @@ class SegmentationNet10a(VGGNet):
     self.batchnorm_track = False
 
     self.trunk = SegmentationNet10aTrunk(cfg=SegmentationNet10a.cfg)
-    self.head = SegmentationNet10aHead(output_k = 6,
+    self.head = SegmentationNet10aHead(output_k = n, # defined above, 3 or 6
                                        cfg=SegmentationNet10a.cfg)
 
     self._initialize_weights()
@@ -319,19 +320,69 @@ def try_gpu():
 
 # Temperal,
 def feedForward():
-    origin_iter, flip_iter, color_iter, crop_iter = getDataIterators()
-    # printBatchInfo(origin_iter)
+
+    #create a model
+    segmentationModel = SegmentationNet10a().to(try_gpu())
+    print("Model buildt")
+
+    potsdam = Potsdam(root=potsdamData)
+    potsdam_loader = torch.utils.data.DataLoader(potsdam, batch_size=batch_size, shuffle=True)
 
     # Train the model batch by batch
-    if (origin_iter.hasNext()):  ##right？  for...
+    batch = 1
+    for data in potsdam_loader:
+        print('Batch ' + str(batch))
 
-        ## Data for one Batch
-        batch_origin = next(origin_iter)
-        batch_flip = next(flip_iter)
-        batch_color = next(color_iter)
-        batch_crop = next(crop_iter)
+        originList = []
+        flipList = []
+        jitterList =[]
 
-        print(input.size)
+        for i in range (data.shape[0]):
+
+            #Unpack 'data', which consist of 3 tensors for each image
+            #Make dataset for one batch: original, flipped and colorjittered
+            origin = data[i][0]
+            flip = data[i][1]
+            jitter = data[i][2]
+
+            originList.append(origin)
+            flipList.append(flip)
+            jitterList.append(jitter)
+
+
+
+        #shape: batchSize, 4, 200,200
+        originBatch = torch.stack(originList)
+        flipBatch = torch.stack(flipList)
+        jitterBatch = torch.stack(jitterList)
+
+        # get output for different data set
+        outputOrigin = segmentationModel.forward(originBatch)[0].permute(0,2,3,1)
+        outputFlip = segmentationModel.forward(flipBatch)[0].permute(0,2,3,1)
+        outputJit = segmentationModel.forward(jitterBatch)[0].permute(0,2,3,1)
+
+        loss = getLossT(outputOrigin, outputOrigin)
+        print('loss: ' + str(loss))
+
+        #break
+
+
+
+
+        batch = batch + 1
+
+    print('Total: '+ str(batch-1) + ' batches')
+
+
+
+
+
+
+
+
+
+
+
 
         # when get output
         # getLoss()
@@ -339,40 +390,29 @@ def feedForward():
 
 def main():
 
-    potsdamData = 'demo/'
-    batch_size = 5
+    feedForward()
 
-    # prepare Original  Dataset, 3 batches, 5 images per batch
-    potsdam_origin = Potsdam(root=potsdamData)
-    potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
-    potsdam_origin_iter = iter(potsdam_origin_loader)
-
-    # prepare Flip Dataset
-    potsdam_flip = Potsdam(root=potsdamData, transforms=flip)
-    potsdam_flip_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
-    potsdam_flip_iter = iter(potsdam_origin_loader)
-
-    sampleInput_origin = next(potsdam_origin_iter)
-    sampleInput_flip = next(potsdam_flip_iter)
+    #origin_iter, flip_iter, _, _,_ = getDataIterators()
+    #sampleInput_origin = next(origin_iter)
+    #sampleInput_flip = next(flip_iter)
 
     # create a model
-    segmentationModel = SegmentationNet10a().to(try_gpu())
+    #segmentationModel = SegmentationNet10a().to(try_gpu())
 
     # get output for different data set
-    originOutput = segmentationModel.forward(sampleInput_origin)[0].permute(0,2,3,1)
-    flipOutput = segmentationModel.forward(sampleInput_flip)[0].permute(0,2,3,1)
-    print(flipOutput.shape)
-
-    # Expect sampleOutput shape: [20, 200, 200, 6]
+    #originOutput = segmentationModel.forward(sampleInput_origin)[0].permute(0,2,3,1)
+    #flipOutput = segmentationModel.forward(sampleInput_flip)[0].permute(0,2,3,1)
+    #print(flipOutput.shape)
 
     # calculate the loss
-    loss = getLossT(originOutput, flipOutput)
-    print('loss: ' + str(loss))
+    #loss = getLossT(originOutput, flipOutput)
+    #print('loss: ' + str(loss))
 
-    loss.backward()
-    optimizer = optim.Adam(segmentationModel.parameters(), lr = 0.001)
-    optimizer.step()
-    print("done")
+    #loss.backward()
+    #print("done batch i")
+    #optimizer = optim.Adam(segmentationModel.parameters(), lr = 0.001)
+    #optimizer.step()
+
 
 
 

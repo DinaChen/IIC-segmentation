@@ -14,39 +14,29 @@ import scipy.io
 
 
 class Potsdam(VisionDataset):
-    def __init__(self, root, transforms = None):
+    def __init__(self, root):
         #super()._init_(root, transforms)
         self.root = root
         self.images = os.listdir(root)
         self.groundTruth = os.listdir(root)
-        self.transforms = transforms
 
     def __getitem__(self, index):
 
         path = self.root + self.images[index]
-
-
-        # error : expecting scalar byte but get float
-
         image = scipy.io.loadmat(path)['img'].astype(np.uint8)
 
-        # Transform npArray to PIL, needed for the transformation functions
-        image = Image.fromarray((image))
+        # get two types of transformed images
+        origin = Image.fromarray((image))
+        flipImg = Potsdam.flip(image)
+        jitter = Potsdam.jitter(image)
 
-        if self.transforms:
+        # PIL to float tensor
+        originTensor = torchvision.transforms.functional.pil_to_tensor(origin).float()
+        flipTensor = torchvision.transforms.functional.pil_to_tensor(flipImg).float()
+        jitterTensor = torchvision.transforms.functional.pil_to_tensor(jitter).float()
 
-            image = self.transforms(image)
+        tensor = torch.stack((originTensor, flipTensor, jitterTensor), dim=0)
 
-        #image.show()
-
-
-        # PIL to tensor, to byte tensor
-        tensor = torchvision.transforms.functional.pil_to_tensor(image).float()
-
-        # wont work. np directly to tensor
-        #tensorFromNp = torch.tensor(image)
-        #order =  tensorFromNp.permute(2,0,1)
-        #print(order.shape)
 
         return  tensor
 
@@ -54,67 +44,67 @@ class Potsdam(VisionDataset):
     def __len__(self):
         return len(self.images)
 
-# The 3 transformation functions
-def flip(image):
 
-    image = ImageOps.mirror(image)  #image type: PIL
+    # The 2 transformation functions
 
-    return image
+    # input: npArray
+    def flip(image):
+        image = Image.fromarray((image))
+        image = ImageOps.mirror(image)
+        # image type: PIL
 
-def colorJitter(image):
+        return image
 
-    ## ?????????????????????????
-    hue = (-0.5, 0.5)
-    contrast = (0, 1)
-    saturation = (0, 1)
-    brightness = (0, 5)
+    # input: an nparray image
+    def jitter(image):
 
-    collorJitter = tvt.transforms.ColorJitter(brightness, contrast, saturation, hue)
-    image = collorJitter(image)
+        ## ?????????????????????????
+        hue = (-0.5, 0.5)
+        contrast = (0, 1)
+        saturation = (0, 1)
+        brightness = (0, 2)
 
-    return image
+        collorJitter = tvt.transforms.ColorJitter(brightness, contrast, saturation, hue)
 
-def randomCrop(image):
+        # Seperate rgb and ir channels, NpArray
+        img_ir = image[:, :, 3]
+        img_ir = img_ir.astype(np.float32) / 255.
+        img_rgb = image[:, :, :3]
 
-    return image
+        # npArray to PIL for jitter function
+        imgRGB = Image.fromarray(img_rgb.astype(np.uint8))
 
-def main():
+        # Jittered image is in PIL format
+        imgJit = collorJitter(imgRGB)
+        # imgJit.show()
 
+        # PIL to NpArray for concatenation
+        imgJit = np.array(imgJit)
+        imgJit = imgJit.astype(np.float32) / 255.
 
-    potsdamData = 'demo/'
-    batch_size = 5
+        # Concatenate IR back on before spatial warps
+        # may be concatenating onto just greyscale image
+        # grey/RGB underneath IR
+        imgJit = np.concatenate([imgJit, np.expand_dims(img_ir, axis=2)], axis=2)
 
-    # prepare Original  Dataset
-    #potsdam_origin = Potsdam(root = potsdamData)
-    #potsdam_origin_loader = torch.utils.data.DataLoader(potsdam_origin, batch_size=batch_size, shuffle=False)
-    #potsdam_origin_iter = iter(potsdam_origin_loader)
+        # NpArray to PIL
+        imgJit = Image.fromarray((imgJit * 255).astype(np.uint8))
+        #imgJit.show()
 
-    #print(len(potsdam_origin_loader)) #get amount of batch
-
-    #for bn, batch in enumerate(potsdam_origin_iter):
-    #   print('Batch No.: ' + str(bn))
-    #   print(batch.shape)
-
-
-
-    #gt = scipy.io.loadmat('potsdamDemo/gt/2.mat')['gt']
-    #print(gt)
-
-
-
-    # Prepare Flipped Dataset
-    #potsdam_flip = Potsdam(root = potsdam_preprocessed, transforms=flip)
-    #potsdam_flip_loader = torch.utils.data.DataLoader(potsdam_flip, batch_size=batch_size, shuffle=False)
-    #potsdam_flip_iter = iter(potsdam_flip_loader)
-
-    # Prepare ColorJittered Dataset
-    #potsdam_color = Potsdam(root = potsdam_preprocessed, transforms=colorJitter)
-    #potsdam_color_loader = torch.utils.data.DataLoader(potsdam_color, batch_size=batch_size, shuffle=False)
-    #potsdam_color_iter = iter(potsdam_color_loader)
+        return imgJit
 
 
 
 
 
 
-main()
+
+
+
+
+
+
+
+
+
+
