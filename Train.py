@@ -18,12 +18,15 @@ import torch.optim as optim
 from vgg import VGGTrunk, VGGNet
 
 
+n = 3  #for potsdam-3
+#batch_size = 75
+#n = 6 #for potsdam-6
+#batch_size = 60
+
 #potsdamData = r'/content/drive/MyDrive/Colab Notebooks/demo/'
 potsdamData = 'demo/'
 batch_size = 5
 displacements = ['up']#'down','left','right','upright','upleft','downright','downleft']
-n = 3  #for potsdam-3
-#n = 6 #for potsdam-6
 EPS = float_info.epsilon
 
 
@@ -514,9 +517,9 @@ def main():
     potsdam_loader = torch.utils.data.DataLoader(potsdam, batch_size=batch_size, shuffle=True)
 
     # Train the model batch by batch
-    batch = 1
+    batch = 0
     for data in potsdam_loader:
-        print('########## Batch ' + str(batch) + ' ######## ' + str(data.shape[0]) + ' images ##########')
+        print('########## Batch ' + str(batch+1) + ' ######## ' + str(data.shape[0]) + ' images ##########')
 
         originList = []
         flipList = []
@@ -569,13 +572,19 @@ def main():
         loss = (lossFlip + lossColor + lossFlipOver + lossJitOver) / 4
         print(loss)
 
-        # avgLoss.backward()
+            # Do back propagation
+        # loss.backward()
         # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
         # optimizer.step()
 
         batch = batch + 1
         # print("Done batch " + str(batch))
         break
+
+        # The model is trained
+        # get testing data:
+
+
 
 
 

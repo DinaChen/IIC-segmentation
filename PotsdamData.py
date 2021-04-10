@@ -12,7 +12,6 @@ import scipy.io
 
 
 
-
 class Potsdam(VisionDataset):
     def __init__(self, root):
         #super()._init_(root, transforms)
@@ -57,7 +56,6 @@ class Potsdam(VisionDataset):
 
     # input: an nparray image
     def jitter(image):
-
 
         hue = 0.1
         contrast = 0.1

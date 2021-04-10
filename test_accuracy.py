@@ -60,9 +60,9 @@ def sort_path(path):
            
     
 def main():
-    #phi is n*200*200*3,which we get from taining results
+    #phi is n*200*200*c, which we get from taining results
     #the following phi is just for test, it's not the true phi
-    phi=torch.zeros(5400,200, 200,3) 
+    phi=torch.zeros(5400,200, 200, 3)
     n=5400
     #gt = scipy.io.loadmat('gt/3.mat')['gt']
     #gt=torch.ones(200, 200) 
