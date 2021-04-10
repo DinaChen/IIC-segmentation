@@ -16,11 +16,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from vgg import VGGTrunk, VGGNet
+import PotsdamTestData
+import test_accuracy
 
+# Potsdam-3 and Potsdam-6
 
-n = 3  #for potsdam-3
+#n = 3  #for potsdam-3
 #batch_size = 75
-#n = 6 #for potsdam-6
+n = 6 #for potsdam-6
 #batch_size = 60
 
 #potsdamData = r'/content/drive/MyDrive/Colab Notebooks/demo/'
@@ -542,35 +545,35 @@ def main():
         jitterBatch = torch.stack(jitterList)
 
         # get output distribution
-        outputOrigin = segModel.forward(originBatch, head='A')[0]
-        outputOrigin_overCluster = segModel.forward(originBatch, head='B')[0]
+        #outputOrigin = segModel.forward(originBatch, head='A')[0]
+        #outputOrigin_overCluster = segModel.forward(originBatch, head='B')[0]
 
-        outputFlip = segModel.forward(flipBatch, head='A')[0]
-        outputFlip_overCluster = segModel.forward(flipBatch, head='B')[0]
+        #outputFlip = segModel.forward(flipBatch, head='A')[0]
+        #outputFlip_overCluster = segModel.forward(flipBatch, head='B')[0]
 
-        outputJit = segModel.forward(jitterBatch, head='A')[0]
-        outputJit_overCluter = segModel.forward(jitterBatch, head='B')[0]
+        #outputJit = segModel.forward(jitterBatch, head='A')[0]
+        #outputJit_overCluter = segModel.forward(jitterBatch, head='B')[0]
 
         # flip back the images for loss calculation
-        for i in range(outputFlip.shape[0]):
-            img = outputFlip[i]  # [c,200,200], we want to flip it by the last dimension
-            flipImg = torchvision.transforms.functional.hflip(img)
-            outputFlip[i] = flipImg
+        #for i in range(outputFlip.shape[0]):
+        #    img = outputFlip[i]  # [c,200,200], we want to flip it by the last dimension
+        #    flipImg = torchvision.transforms.functional.hflip(img)
+        #    outputFlip[i] = flipImg
 
-        for i in range(outputFlip_overCluster.shape[0]):
-            img = outputFlip_overCluster[i]  # [c,200,200], we want to flip it by the last dimension
-            flipImg = torchvision.transforms.functional.hflip(img)
-            outputFlip_overCluster[i] = flipImg
+        #for i in range(outputFlip_overCluster.shape[0]):
+        #    img = outputFlip_overCluster[i]  # [c,200,200], we want to flip it by the last dimension
+        #    flipImg = torchvision.transforms.functional.hflip(img)
+        #    outputFlip_overCluster[i] = flipImg
 
         #calculate loss and avg over them
-        lossFlip, _ = IID_segmentation_loss(outputOrigin, outputFlip)
-        lossColor, _ = IID_segmentation_loss(outputOrigin, outputJit)
+        #lossFlip, _ = IID_segmentation_loss(outputOrigin, outputFlip)
+        #lossColor, _ = IID_segmentation_loss(outputOrigin, outputJit)
 
-        lossFlipOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputFlip_overCluster)
-        lossJitOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputJit_overCluter)
+        #lossFlipOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputFlip_overCluster)
+        #lossJitOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputJit_overCluter)
 
-        loss = (lossFlip + lossColor + lossFlipOver + lossJitOver) / 4
-        print(loss)
+        #loss = (lossFlip + lossColor + lossFlipOver + lossJitOver) / 4
+        #print(loss)
 
             # Do back propagation
         # loss.backward()
@@ -578,12 +581,20 @@ def main():
         # optimizer.step()
 
         batch = batch + 1
-        # print("Done batch " + str(batch))
+        print("Done batch " + str(batch))
         break
 
-        # The model is trained
-        # get testing data:
+    # The model is trained
+    # get testing data:
+    print('Start Testing')
+    testData, testGt = PotsdamTestData.getTestData()
+    #print(testData.shape)
+    testOutput = segModel.forward(testData, head='A')[0]
+    #print(testOutput.shape)
+    #print(testGt.shape)
 
+    accuracy = test_accuracy.calculate_accuracy_all(testOutput, testGt, n)
+    print(accuracy)
 
 
 

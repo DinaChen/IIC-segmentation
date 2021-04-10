@@ -17,57 +17,60 @@ import torch.nn.functional as F
 import scipy.io
 
 
-def calculate_average_accuracy(gt_path,whole_phi,n):
-    
-    path_list=sort_path(gt_path) #sort gt path
-    num=0
-    for i in range(0,n):
-        gt = scipy.io.loadmat(gt_path+path_list[i])['gt']
-        num+=calculate_accuracy(whole_phi[i], gt)
-    num/=n
-    return num
 
-def calculate_accuracy(phi,gt):
+# calculate the accuracy for whole test set
+# imgs: [testSetSize, c, 200, 200]
+# gt: [testSetSize, 200, 200]
+def calculate_accuracy_all(imgs, gts, n):
+    assert imgs.shape[0] == gts.shape[0]
+    testSetSize = imgs.shape[0]
+
+    accuracy = 0
+    for i in range(testSetSize):
+
+        accu = calculate_accuracy(imgs[i], gts[i],n)
+        accuracy = accuracy + accu
+
+        #print(accu)
+
+    avgAccuracy = accuracy / testSetSize
+    return avgAccuracy
+
+
+
+# calculate the accuracy of one image
+# imgs: [c, 200, 200]
+# gt: [200,200]
+def calculate_accuracy(phi,gt,n):
+
+    # first convert imgs shape to [200, 200, c]
+    phi = phi.permute(1,2,0)
+
     flag=0
     for i in range(0,200):
         for j in range(0,200):
-            m=find_max(phi[i][j])
-            n=gt[i][j]
-            if m==n:
-                flag+=1
+
+            # find index with maximum probability
+            img_class = torch.argmax(phi[i][j])
+            gt_class = gt[i][j]
+
+            if(sameClass(img_class,gt_class,n)):
+                flag = flag+1
+
     accuracy=flag/40000
-    # add "%"
-    accuracy*=100
+
     return accuracy
     
 
-def find_max(vec):
-    maximum=max(vec[0],vec[1],vec[2])
-    return maximum
+def sameClass(imgClass, gtClass, n):
 
-def sort_path(path):
-    
- 
-    path_list = os.listdir(path)
- 
- 
-    path_list.sort(key=lambda x:int(x.split('.')[0]))
- 
-    #print(path_list)
-    return path_list
+    if n == 6:
+        return imgClass==gtClass
 
+    # if n = 3
+    if (gtClass == 5): gtClass = 1
+    if (gtClass == 4): gtClass = 0
+    if (gtClass == 3): gtClass = 2
+
+    return imgClass==gtClass
     
-           
-    
-def main():
-    #phi is n*200*200*c, which we get from taining results
-    #the following phi is just for test, it's not the true phi
-    phi=torch.zeros(5400,200, 200, 3)
-    n=5400
-    #gt = scipy.io.loadmat('gt/3.mat')['gt']
-    #gt=torch.ones(200, 200) 
-    gt_path = 'gt/'
-    accuracy=calculate_average_accuracy(gt_path, phi, n)
-    print(accuracy,"%")
-    
-main()

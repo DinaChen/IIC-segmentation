@@ -68,17 +68,10 @@ def getTestData():
     for data in potsdamTest_loader:
         imgs = data[0]
         gts = data[1]
-        print(imgs.shape)
-        print(gts.shape)
+        #print(imgs.shape)
+        #print(gts.shape)
         return (imgs,gts)
 
 
 
         
-def main():
-    getTestData()
-
-
-
-main()
-
