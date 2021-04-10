@@ -331,7 +331,13 @@ class SegmentationNet10aTwoHead(VGGNet):
           return x
 
 # input: a batch of flipped images
-def flipBack(flippedBatch):
+def flipBatch(flippedBatch):
+
+    for i in range(flippedBatch.shape[0]):
+        img = flippedBatch[i]  # [c,200,200], we want to flip it by the last dimension
+        flipImg = torchvision.transforms.functional.hflip(img)
+        flippedBatch[i] = flipImg
+
 
     return flippedBatch
 
@@ -419,6 +425,9 @@ def feedForward():
 
     print('Total: '+ str(batch-1) + ' batches')
 
+
+# IIC original code
+# Calculate the loss given two batch of output
 def IID_segmentation_loss(x1_outs, x2_outs, all_affine2_to_1=None,
                               all_mask_img1=None, lamb=1.0,
                               half_T_side_dense= 10,
@@ -492,8 +501,6 @@ def IID_segmentation_loss(x1_outs, x2_outs, all_affine2_to_1=None,
 
         return loss, loss_no_lamb
 
-        # when get output
-        # getLoss()
 
 
 def main():
@@ -531,17 +538,45 @@ def main():
         flipBatch = torch.stack(flipList)
         jitterBatch = torch.stack(jitterList)
 
+        # get output distribution
+        outputOrigin = segModel.forward(originBatch, head='A')[0]
+        outputOrigin_overCluster = segModel.forward(originBatch, head='B')[0]
 
-        outputOrigin = segModel.forward(originBatch, head='A')[0]#.permute(0, 2, 3, 1)
+        outputFlip = segModel.forward(flipBatch, head='A')[0]
+        outputFlip_overCluster = segModel.forward(flipBatch, head='B')[0]
 
-        outputJit = segModel.forward(jitterBatch, head='A')[0]#.permute(0, 2, 3, 1)
+        outputJit = segModel.forward(jitterBatch, head='A')[0]
+        outputJit_overCluter = segModel.forward(jitterBatch, head='B')[0]
 
+        # flip back the images for loss calculation
+        for i in range(outputFlip.shape[0]):
+            img = outputFlip[i]  # [c,200,200], we want to flip it by the last dimension
+            flipImg = torchvision.transforms.functional.hflip(img)
+            outputFlip[i] = flipImg
 
-        loss, loss1 = IID_segmentation_loss(outputOrigin, outputJit)
+        for i in range(outputFlip_overCluster.shape[0]):
+            img = outputFlip_overCluster[i]  # [c,200,200], we want to flip it by the last dimension
+            flipImg = torchvision.transforms.functional.hflip(img)
+            outputFlip_overCluster[i] = flipImg
 
-        # try first with color jitter, no transform back is needed
+        #calculate loss and avg over them
+        lossFlip, _ = IID_segmentation_loss(outputOrigin, outputFlip)
+        lossColor, _ = IID_segmentation_loss(outputOrigin, outputJit)
+
+        lossFlipOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputFlip_overCluster)
+        lossJitOver, _ = IID_segmentation_loss(outputOrigin_overCluster, outputJit_overCluter)
+
+        loss = (lossFlip + lossColor + lossFlipOver + lossJitOver) / 4
         print(loss)
+
+        # avgLoss.backward()
+        # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
+        # optimizer.step()
+
+        batch = batch + 1
+        # print("Done batch " + str(batch))
         break
+
 
 
 
