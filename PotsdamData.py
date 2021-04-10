@@ -38,7 +38,7 @@ class Potsdam(VisionDataset):
         tensor = torch.stack((originTensor, flipTensor, jitterTensor), dim=0)
 
 
-        return  tensor
+        return  tensor#.to('cuda')
 
 
     def __len__(self):
@@ -58,11 +58,11 @@ class Potsdam(VisionDataset):
     # input: an nparray image
     def jitter(image):
 
-        ## ?????????????????????????
-        hue = (-0.5, 0.5)
-        contrast = (0, 1)
-        saturation = (0, 1)
-        brightness = (0, 2)
+
+        hue = 0.1
+        contrast = 0.1
+        saturation = 0.1
+        brightness = 0.1
 
         collorJitter = tvt.transforms.ColorJitter(brightness, contrast, saturation, hue)
 

@@ -1,4 +1,6 @@
 import os
+from sys import float_info
+
 import numpy as np
 import cv2
 import torch
@@ -16,12 +18,13 @@ import torch.optim as optim
 from vgg import VGGTrunk, VGGNet
 
 
-
+#potsdamData = r'/content/drive/MyDrive/Colab Notebooks/demo/'
 potsdamData = 'demo/'
 batch_size = 5
 displacements = ['up']#'down','left','right','upright','upleft','downright','downleft']
 n = 3  #for potsdam-3
 #n = 6 #for potsdam-6
+EPS = float_info.epsilon
 
 
 # equation 3
@@ -103,7 +106,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType)
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
     amountClass = originBatch.shape[3]
-    matrix = torch.zeros(amountClass, amountClass)
+    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
 
     for id in range(amountImage):
         #print(id + 1)
@@ -134,7 +137,7 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
     # for each pixel in original image, get corresponding pixel in the transformed image
     # get their class distribution: phi_origin, phi_transformed
 
-    matrix = torch.zeros(amountClass, amountClass)
+    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
 
     for h in range(0, imgSize):
 
@@ -204,7 +207,32 @@ def getDirection(x):
     }[x]
 
 
-######################### Model ################################
+######################### Calculate Loss ################################
+
+def random_translation_multiple(data, half_side_min, half_side_max):
+  n, c, h, w = data.shape
+
+  # pad last 2, i.e. spatial, dimensions, equally in all directions
+  data = F.pad(data,
+               (half_side_max, half_side_max, half_side_max, half_side_max),
+               "constant", 0)
+  assert (data.shape[2:] == (2 * half_side_max + h, 2 * half_side_max + w))
+
+  # random x, y displacement
+  t = np.random.randint(half_side_min, half_side_max + 1, size=(2,))
+  polarities = np.random.choice([-1, 1], size=(2,), replace=True)
+  t *= polarities
+
+  # -x, -y in orig img frame is now -x+half_side_max, -y+half_side_max in new
+  t += half_side_max
+
+  data = data[:, :, t[1]:(t[1] + h), t[0]:(t[0] + w)]
+  assert (data.shape[2:] == (h, w))
+
+  return data
+
+
+
 
 
 class SegmentationNet10aTrunk(VGGTrunk):
@@ -302,6 +330,11 @@ class SegmentationNet10aTwoHead(VGGNet):
 
           return x
 
+# input: a batch of flipped images
+def flipBack(flippedBatch):
+
+    return flippedBatch
+
 def try_gpu():
     """
     If GPU is available, return torch.device as cuda:0; else return torch.device
@@ -375,7 +408,7 @@ def feedForward():
         print('overCluster loss: ' + str(loss_overCluster))
         print('avg loss: ' + str(avgLoss))
 
-        # avgloss.backward()
+        # avgLoss.backward()
         # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
         # optimizer.step()
 
@@ -386,16 +419,78 @@ def feedForward():
 
     print('Total: '+ str(batch-1) + ' batches')
 
+def IID_segmentation_loss(x1_outs, x2_outs, all_affine2_to_1=None,
+                              all_mask_img1=None, lamb=1.0,
+                              half_T_side_dense= 10,
+                              half_T_side_sparse_min=0,
+                              half_T_side_sparse_max=0):
+        assert (x1_outs.requires_grad)
+        assert (x2_outs.requires_grad)
+        # assert (not all_affine2_to_1.requires_grad)
+        # assert (not all_mask_img1.requires_grad)
 
+        assert (x1_outs.shape == x2_outs.shape)
 
+        # bring x2 back into x1's spatial frame
+        # todo : do this before this function
+        # x2_outs_inv = perform_affine_tf(x2_outs, all_affine2_to_1)
 
+        # Displacement
+        if (half_T_side_sparse_min != 0) or (half_T_side_sparse_max != 0):
+          x2_outs_inv = random_translation_multiple(x2_outs,
+                                                    half_side_min=half_T_side_sparse_min,
+                                                    half_side_max=half_T_side_sparse_max)
 
+        # if RENDER:
+        # indices added to each name by render()
+        #  render(x1_outs, mode="image_as_feat", name="invert_img1_")
+        #  render(x2_outs, mode="image_as_feat", name="invert_img2_pre_")
+        #  render(x2_outs_inv, mode="image_as_feat", name="invert_img2_post_")
+        #  render(all_mask_img1, mode="mask", name="invert_mask_")
 
+        # zero out all irrelevant patches
+        bn, k, h, w = x1_outs.shape
+        #all_mask_img1 = all_mask_img1.view(bn, 1, h, w)  # mult, already float32
+        #x1_outs = x1_outs * all_mask_img1  # broadcasts
+        #x2_outs = x2_outs * all_mask_img1
 
+        # sum over everything except classes, by convolving x1_outs with x2_outs_inv
+        # which is symmetric, so doesn't matter which one is the filter
+        x1_outs = x1_outs.permute(1, 0, 2, 3).contiguous()  # k, ni, h, w
+        x2_outs = x2_outs.permute(1, 0, 2, 3).contiguous()  # k, ni, h, w
 
+        # k, k, 2 * half_T_side_dense + 1,2 * half_T_side_dense + 1
+        p_i_j = F.conv2d(x1_outs, weight=x2_outs, padding=(half_T_side_dense,
+                                                           half_T_side_dense))
+        p_i_j = p_i_j.sum(dim=2, keepdim=False).sum(dim=2, keepdim=False)  # k, k
 
+        # normalise, use sum, not bn * h * w * T_side * T_side, because we use a mask
+        # also, some pixels did not have a completely unmasked box neighbourhood,
+        # but it's fine - just less samples from that pixel
+        current_norm = float(p_i_j.sum())
+        p_i_j = p_i_j / current_norm
 
+        # symmetrise
+        p_i_j = (p_i_j + p_i_j.t()) / 2.
 
+        # compute marginals
+        p_i_mat = p_i_j.sum(dim=1).unsqueeze(1)  # k, 1
+        p_j_mat = p_i_j.sum(dim=0).unsqueeze(0)  # 1, k
+
+        # for log stability; tiny values cancelled out by mult with p_i_j anyway
+        p_i_j[(p_i_j < EPS).data] = EPS
+        p_i_mat[(p_i_mat < EPS).data] = EPS
+        p_j_mat[(p_j_mat < EPS).data] = EPS
+
+        # maximise information
+        loss = (-p_i_j * (torch.log(p_i_j) - lamb * torch.log(p_i_mat) -
+                          lamb * torch.log(p_j_mat))).sum()
+
+        # for analysis only
+        loss_no_lamb = (-p_i_j * (torch.log(p_i_j) - torch.log(p_i_mat) -
+                                  torch.log(p_j_mat))).sum()
+
+        return loss, loss_no_lamb
 
         # when get output
         # getLoss()
@@ -403,30 +498,50 @@ def feedForward():
 
 def main():
 
-    feedForward()
+    #feedForward()
 
-    #origin_iter, flip_iter, _, _,_ = getDataIterators()
-    #sampleInput_origin = next(origin_iter)
-    #sampleInput_flip = next(flip_iter)
+    segModel = SegmentationNet10aTwoHead().to(try_gpu())
+    print("Model buildt")
 
-    # create a model
-    #segmentationModel = SegmentationNet10a().to(try_gpu())
+    potsdam = Potsdam(root=potsdamData)
+    potsdam_loader = torch.utils.data.DataLoader(potsdam, batch_size=batch_size, shuffle=True)
 
-    # get output for different data set
-    #originOutput = segmentationModel.forward(sampleInput_origin)[0].permute(0,2,3,1)
-    #flipOutput = segmentationModel.forward(sampleInput_flip)[0].permute(0,2,3,1)
-    #print(flipOutput.shape)
+    # Train the model batch by batch
+    batch = 1
+    for data in potsdam_loader:
+        print('########## Batch ' + str(batch) + ' ######## ' + str(data.shape[0]) + ' images ##########')
 
-    # calculate the loss
-    #loss = getLossT(originOutput, flipOutput)
-    #print('loss: ' + str(loss))
+        originList = []
+        flipList = []
+        jitterList = []
 
-    #loss.backward()
-    #print("done batch i")
-    #optimizer = optim.Adam(segmentationModel.parameters(), lr = 0.001)
-    #optimizer.step()
+        for i in range(data.shape[0]):
+            # Unpack 'data', which consist of 3 tensors for each image
+            # Make dataset for one batch: original, flipped and colorjittered
+            origin = data[i][0]
+            flip = data[i][1]
+            jitter = data[i][2]
+
+            originList.append(origin)
+            flipList.append(flip)
+            jitterList.append(jitter)
+
+        # shape: batchSize, 4, 200,200
+        originBatch = torch.stack(originList)
+        flipBatch = torch.stack(flipList)
+        jitterBatch = torch.stack(jitterList)
 
 
+        outputOrigin = segModel.forward(originBatch, head='A')[0]#.permute(0, 2, 3, 1)
+
+        outputJit = segModel.forward(jitterBatch, head='A')[0]#.permute(0, 2, 3, 1)
+
+
+        loss, loss1 = IID_segmentation_loss(outputOrigin, outputJit)
+
+        # try first with color jitter, no transform back is needed
+        print(loss)
+        break
 
 
 
