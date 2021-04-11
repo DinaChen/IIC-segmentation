@@ -28,6 +28,10 @@ import scipy.io
 gtRoot = 'TestDemoGt/'
 imgRoot = 'demo/'
 
+# On Colab
+#gtRoot = r'/content/drive/MyDrive/Colab Notebooks/gt/'
+#imgRoot = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
+
 
 
 class Potsdam_test(VisionDataset):
@@ -53,7 +57,8 @@ class Potsdam_test(VisionDataset):
 
 
         # img [4, 200, 200], gt[200,200]
-        return  (imgTensor, gtTensor)  #.to('cuda')
+        #return  (imgTensor.float().to('cuda'), gtTensor)
+        return (imgTensor, gtTensor)
 
     def __len__(self):
         return len(self.images)
