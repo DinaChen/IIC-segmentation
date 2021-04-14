@@ -24,221 +24,15 @@ import test_accuracy
 #n = 3  #for potsdam-3
 #batch_size = 75
 n = 6 #for potsdam-6
-#batch_size = 60
+batch_size = 11
 
-#potsdamData = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
-potsdamData = 'demo/'
-batch_size = 5
-displacements = ['up']#'down','left','right','upright','upleft','downright','downleft']
+potsdamData = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
+#potsdamData = 'demo/'
+#batch_size = 5
 EPS = float_info.epsilon
 
 
-# equation 3
-def getInformation(matrixP):
-
-    # symmetrize matrixP
-    transpose = torch.transpose(matrixP, 0,1)
-    matrix = (matrixP + transpose)/2
-
-    information = 0
-
-    for h in range(matrix.shape[0]):
-        p_h = torch.sum(matrix[h])
-
-        for w in range (matrix.shape[1]):
-            p_w = torch.sum(matrix[w])
-
-            p_hw = matrix[h][w]
-
-            info = p_hw * torch.log(p_hw/p_w*p_h)
-            information = info+information
-
-    return information
-
-
-# temperal! for trying to use the model
-
-def getLossT(output_origin, output_flip):
-
-    totalLoss = 0
-
-    for displacement in displacements:
-
-        #There are 8 displacements
-        print('Displacement: ' + str(displacement))
-
-        transform1 = getImageAvgMatrix(output_origin, output_flip, displacement, 'flip')
-
-        transformAvgMatrix = (transform1 + transform1 + transform1) / 3;
-        loss = getInformation(transformAvgMatrix)
-        totalLoss = totalLoss + loss
-
-    avgLoss = totalLoss / 8
-
-    return avgLoss
-
-# Equation 5, objective function
-# for each displacement, calculate the matrix, which is averaged over 2 transformations
-# calculate the loss, then average over the displacements.
-def getLoss(output_origin, output_flip, output_color):
-
-    totalLoss = 0
-
-    for displacement in displacements:
-
-        # There are 8 displacements
-        print('Displacement: ' + str(displacement))
-
-        print('Transformation: flip')
-        transform1 = getImageAvgMatrix(output_origin, output_flip, displacement, 'flip')
-        print('Transformation: colorJitter \n')
-        transform2 = getImageAvgMatrix(output_origin, output_color, displacement, 'color')
-
-        transformAvgMatrix = (transform1 + transform2) / 2;
-        loss = getInformation(transformAvgMatrix)
-        totalLoss = totalLoss + loss
-
-    avgLoss = totalLoss / 8
-
-    return avgLoss
-
-
-# input: a batch of origin images,
-#        a batch of transformed image
-#        displacement type(string)
-#        type of transformation
-# output: 3*3 (potsdam few) or 6*6(potsdam full) matrix, avg over all images in batch.
-def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType):
-
-    amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
-    amountClass = originBatch.shape[3]
-    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
-
-    for id in range(amountImage):
-        #print(id + 1)
-
-        image_x = originBatch[id]
-        image_gx = transformedBatch[id]
-
-        imageMatrix = getPixelMatrixP(image_x, image_gx, displacement, transformType)
-        matrix = torch.add(matrix, imageMatrix)
-
-    imageAvgMatrix = torch.div(matrix, amountImage)
-
-    return imageAvgMatrix
-
-
-
-# input: distribution of images: Φ（x) , Φ（gx）, shape ([200,200,3]) or ([200,200,6])
-# or [200, 200, 12], [200,200,24] for over clustering
-# output: the matrix p (3*3) or (6,6), averaged over pixels for one image.
-#        type of transformation
-def getPixelMatrixP(origin, transformed, displacement, transformType):
-
-    imgSize = origin.shape[0]
-    amountClass = origin.shape[2]
-    #print(imgSize)
-    #print(amountClass)
-
-    # for each pixel in original image, get corresponding pixel in the transformed image
-    # get their class distribution: phi_origin, phi_transformed
-
-    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
-
-    for h in range(0, imgSize):
-
-        for w in range (0, imgSize):
-
-            #print('pixel: ' + str((h,w)))
-            phi_origin = origin[h][w]
-
-            new_h, new_w  = h,w
-            if(transformType == 'flip'):
-                new_h, new_w = flipCoordinate((h,w))
-            new_h, new_w = getDisplacement((new_h, new_w), displacement)
-            phi_transformed = transformed[new_h][new_w]
-
-            ## get matrix for these 2 pixels
-            matrix_hw = torch.outer(phi_origin, phi_transformed)
-
-            matrix = matrix + matrix_hw
-            #print(matrix_hw)
-
-    #print('total')
-    #print(matrix)
-    amountPixel = imgSize*imgSize
-    #print(matrix/ amountPixel)
-
-    return matrix/amountPixel
-
-
-############################### Helper Functions #################################
-
-
-#get corresponding pixel coordinate (h,w) for a horizontally flipped image
-def flipCoordinate(pixel):
-
-    h,w = pixel
-    return (h, 199-w)
-
-
-# get corresponding pixel coordinate (h,w) for the transformed image, given the displacmenet type.
-# 'u+t' in equation 5 in IIC paper
-def getDisplacement(pixel, displacement):
-
-    h,w = pixel
-    move_h, move_w = getDirection(displacement)
-    new_h = h + move_h
-    new_w = w + move_w
-
-    # when displacement is not possible: out of range 0-200, then not move.
-    if(new_h < 0 or new_h > 199):
-        new_h = h
-    if (new_w < 0 or new_w > 199):
-        new_w = w
-
-    return (new_h, new_w)
-
-
-def getDirection(x):
-    return {
-        'up': (-1,0),
-        'down': (1,0),
-        'left':(0,-1),
-        'right':(0,1),
-        'upright':(-1,1),
-        'upleft':(-1,-1),
-        'downright':(1,1),
-        'downleft':(1,-1),
-    }[x]
-
-
-######################### Calculate Loss ################################
-
-def random_translation_multiple(data, half_side_min, half_side_max):
-  n, c, h, w = data.shape
-
-  # pad last 2, i.e. spatial, dimensions, equally in all directions
-  data = F.pad(data,
-               (half_side_max, half_side_max, half_side_max, half_side_max),
-               "constant", 0)
-  assert (data.shape[2:] == (2 * half_side_max + h, 2 * half_side_max + w))
-
-  # random x, y displacement
-  t = np.random.randint(half_side_min, half_side_max + 1, size=(2,))
-  polarities = np.random.choice([-1, 1], size=(2,), replace=True)
-  t *= polarities
-
-  # -x, -y in orig img frame is now -x+half_side_max, -y+half_side_max in new
-  t += half_side_max
-
-  data = data[:, :, t[1]:(t[1] + h), t[0]:(t[0] + w)]
-  assert (data.shape[2:] == (h, w))
-
-  return data
-
-
-
+######################### Build Model ################################
 
 
 class SegmentationNet10aTrunk(VGGTrunk):
@@ -336,16 +130,6 @@ class SegmentationNet10aTwoHead(VGGNet):
 
           return x
 
-# input: a batch of flipped images
-def flipBatch(flippedBatch):
-
-    for i in range(flippedBatch.shape[0]):
-        img = flippedBatch[i]  # [c,200,200], we want to flip it by the last dimension
-        flipImg = torchvision.transforms.functional.hflip(img)
-        flippedBatch[i] = flipImg
-
-
-    return flippedBatch
 
 def try_gpu():
     """
@@ -360,76 +144,30 @@ def try_gpu():
         print('cuda unavailable')
     return device
 
-# Temperal,
-def feedForward():
+######################### Calculate Loss ################################
 
-    #create a model
-    #segmentationModel = SegmentationNet10a().to(try_gpu())
-    segModel = SegmentationNet10aTwoHead().to(try_gpu())
-    print("Model buildt")
+def random_translation_multiple(data, half_side_min, half_side_max):
+  n, c, h, w = data.shape
 
-    potsdam = Potsdam(root=potsdamData)
-    potsdam_loader = torch.utils.data.DataLoader(potsdam, batch_size=batch_size, shuffle=True)
+  # pad last 2, i.e. spatial, dimensions, equally in all directions
+  data = F.pad(data,
+               (half_side_max, half_side_max, half_side_max, half_side_max),
+               "constant", 0)
+  assert (data.shape[2:] == (2 * half_side_max + h, 2 * half_side_max + w))
 
-    # Train the model batch by batch
-    batch = 1
-    for data in potsdam_loader:
-        print('########## Batch ' + str(batch) + ' ######## '+ str(data.shape[0]) + ' images ##########')
+  # random x, y displacement
+  t = np.random.randint(half_side_min, half_side_max + 1, size=(2,))
+  polarities = np.random.choice([-1, 1], size=(2,), replace=True)
+  t *= polarities
 
-        originList = []
-        flipList = []
-        jitterList =[]
+  # -x, -y in orig img frame is now -x+half_side_max, -y+half_side_max in new
+  t += half_side_max
 
-        for i in range (data.shape[0]):
+  data = data[:, :, t[1]:(t[1] + h), t[0]:(t[0] + w)]
+  assert (data.shape[2:] == (h, w))
 
-            #Unpack 'data', which consist of 3 tensors for each image
-            #Make dataset for one batch: original, flipped and colorjittered
-            origin = data[i][0]
-            flip = data[i][1]
-            jitter = data[i][2]
+  return data
 
-            originList.append(origin)
-            flipList.append(flip)
-            jitterList.append(jitter)
-
-
-
-        #shape: batchSize, 4, 200,200
-        originBatch = torch.stack(originList)
-        flipBatch = torch.stack(flipList)
-        jitterBatch = torch.stack(jitterList)
-
-        # get output distribution for different data set : Original, flipped and colorjittered image data
-        # also for over-clustering
-        outputOrigin = segModel.forward(originBatch, head='A')[0].permute(0,2,3,1)
-        outputOrigin_overCluster = segModel.forward(originBatch, head='B')[0].permute(0, 2, 3, 1)
-
-        outputFlip = segModel.forward(flipBatch, head='A')[0].permute(0,2,3,1)
-        outputFlip_overCluster = segModel.forward(flipBatch, head='B')[0].permute(0, 2, 3, 1)
-
-        outputJit = segModel.forward(jitterBatch, head='A')[0].permute(0,2,3,1)
-        outputJit_overCluter = segModel.forward(jitterBatch, head='B')[0].permute(0,2,3,1)
-
-        # calculate avg loss
-        loss = getLoss(outputOrigin, outputFlip,outputJit)
-        print('Over-clustering')
-        loss_overCluster = getLoss(outputOrigin_overCluster, outputFlip_overCluster,outputJit_overCluter)
-        avgLoss = (loss + loss_overCluster)/2
-
-        print('loss: ' + str(loss))
-        print('overCluster loss: ' + str(loss_overCluster))
-        print('avg loss: ' + str(avgLoss))
-
-        # avgLoss.backward()
-        # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
-        # optimizer.step()
-
-        # print("Done batch " + str(batch))
-
-        break
-        batch = batch + 1
-
-    print('Total: '+ str(batch-1) + ' batches')
 
 
 # IIC original code
@@ -446,9 +184,6 @@ def IID_segmentation_loss(x1_outs, x2_outs, all_affine2_to_1=None,
 
         assert (x1_outs.shape == x2_outs.shape)
 
-        # bring x2 back into x1's spatial frame
-        # todo : do this before this function
-        # x2_outs_inv = perform_affine_tf(x2_outs, all_affine2_to_1)
 
         # Displacement
         if (half_T_side_sparse_min != 0) or (half_T_side_sparse_max != 0):
@@ -511,7 +246,6 @@ def IID_segmentation_loss(x1_outs, x2_outs, all_affine2_to_1=None,
 
 def main():
 
-    #feedForward()
 
     segModel = SegmentationNet10aTwoHead().to(try_gpu())
     print("Model buildt")
@@ -576,22 +310,39 @@ def main():
         print(loss)
 
             # Do back propagation
-        # loss.backward()
-        # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
-        # optimizer.step()
+        loss.backward()
+        optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
+        optimizer.step()
 
         batch = batch + 1
         print("Done batch " + str(batch))
-        break
+        #break
+
 
     # The model is trained
     # get testing data:
     print('Start Testing')
-    testData, testGt = PotsdamTestData.getTestData()
-    testOutput = segModel.forward(testData, head='A')[0]
+    potsdamTest_loader = PotsdamTestData.getTestData(batch_size)
 
-    accuracy = test_accuracy.calculate_accuracy_all(testOutput, testGt, n)
-    print(accuracy)
+    accuracy = 0
+    count = 0
+
+    for data in potsdamTest_loader:
+        testData = data[0]
+        testGt = data[1]
+        #print(imgs.shape)
+        #print(gts.shape)
+
+        testOutput = segModel.forward(testData, head='A')[0]
+        acc = test_accuracy.calculate_accuracy_all(testOutput, testGt, n)
+        accuracy = accuracy + acc
+        count = count + 1
+        print('test batch: ' + str(count))
+
+    accuracy_final = accuracy/count
+    print('Test Done')
+
+    print(accuracy_final)
 
 
 

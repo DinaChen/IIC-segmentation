@@ -35,11 +35,20 @@ import test_accuracy
 # It will keep running 'forever'.   By moving to GPU we can see the traning loop works for this small sample data.  feedforward()
 
 
-potsdamData = 'demo/'
-n = 6
-batch_size = 5
-displacements = ['up']#,'down','left','right','upright','upleft','downright','downleft']
+#potsdamData = 'demo/'
+potsdamData = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
+#n = 3  #for potsdam-3
+#batch_size = 75
+n = 6 #for potsdam-6
+batch_size = 11
+#displacements = ['up']#,'down','left','right','upright','upleft','downright','downleft']
+displacements = ['upright','downleft']
 EPS = float_info.epsilon
+
+
+
+
+
 
 
 ######################################## Calculate Loss #################################
@@ -86,7 +95,7 @@ def getLoss(output_origin, output_flip, output_color):
         loss = getInformation(transformAvgMatrix)
         totalLoss = totalLoss + loss
 
-    avgLoss = totalLoss / 8
+    avgLoss = totalLoss / len(displacements)
 
     return avgLoss
 
@@ -100,7 +109,7 @@ def getImageAvgMatrix(originBatch, transformedBatch, displacement,transformType)
 
     amountImage = originBatch.shape[0]  # mostly equals to batchsize but the last one
     amountClass = originBatch.shape[3]
-    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
+    matrix = torch.zeros(amountClass, amountClass).to('cuda')
 
     for id in range(amountImage):
 
@@ -130,7 +139,7 @@ def getPixelMatrixP(origin, transformed, displacement, transformType):
     # for each pixel in original image, get corresponding pixel in the transformed image
     # get their class distribution: phi_origin, phi_transformed
 
-    matrix = torch.zeros(amountClass, amountClass)#.to('cuda')
+    matrix = torch.zeros(amountClass, amountClass).to('cuda')
 
     for h in range(0, imgSize):
 
@@ -380,17 +389,41 @@ def feedForward():
         print('avg loss: ' + str(avgLoss))
 
         #### back propagation to train the model ###########
-        # avgLoss.backward()
-        # optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
-        # optimizer.step()
+        avgLoss.backward()
+        optimizer = optim.Adam(segModel.parameters(), lr = 0.001)
+        optimizer.step()
 
-        # print("Done batch " + str(batch))
+        print("Done batch " + str(batch))
 
         #break
         batch = batch + 1
 
     print('Total: '+ str(batch) + ' batches')
 
+    # The model is trained
+    # get testing data:
+    print('Start Testing')
+    potsdamTest_loader = PotsdamTestData.getTestData(batch_size)
+
+    accuracy = 0
+    count = 0
+
+    for data in potsdamTest_loader:
+        testData = data[0]
+        testGt = data[1]
+        # print(imgs.shape)
+        # print(gts.shape)
+
+        testOutput = segModel.forward(testData, head='A')[0]
+        acc = test_accuracy.calculate_accuracy_all(testOutput, testGt, n)
+        accuracy = accuracy + acc
+        count = count + 1
+        print('test batch: ' + str(count))
+
+    accuracy_final = accuracy / count
+    print('Test Done')
+
+    print(accuracy_final)
 
 
 def main():

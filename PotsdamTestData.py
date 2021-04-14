@@ -25,12 +25,12 @@ import scipy.io
 
 
 # specify the path to Ground Truth, and the images file
-gtRoot = 'TestDemoGt/'
-imgRoot = 'demo/'
+#gtRoot = 'TestDemoGt/'
+#imgRoot = 'demo/'
 
 # On Colab
-#gtRoot = r'/content/drive/MyDrive/Colab Notebooks/gt/'
-#imgRoot = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
+gtRoot = r'/content/drive/MyDrive/Colab Notebooks/gt/'
+imgRoot = r'/content/drive/MyDrive/Colab Notebooks/imgs/'
 
 
 
@@ -57,25 +57,20 @@ class Potsdam_test(VisionDataset):
 
 
         # img [4, 200, 200], gt[200,200]
-        #return  (imgTensor.float().to('cuda'), gtTensor)
-        return (imgTensor, gtTensor)
+        return  (imgTensor.float().to('cuda'), gtTensor)
+        #return (imgTensor.float(), gtTensor)
 
     def __len__(self):
         return len(self.images)
 
-def getTestData():
+def getTestData(batch_size):
 
     potsdamTestData = Potsdam_test(root=gtRoot)
-    potsdamTest_loader = torch.utils.data.DataLoader(potsdamTestData, batch_size=len(potsdamTestData), shuffle=False)
+    potsdamTest_loader = torch.utils.data.DataLoader(potsdamTestData, batch_size=batch_size, shuffle=False)
     print('Test Set size: ' + str(len(potsdamTestData)))
 
-    # There is only one batch ( for testing)
-    for data in potsdamTest_loader:
-        imgs = data[0]
-        gts = data[1]
-        #print(imgs.shape)
-        #print(gts.shape)
-        return (imgs,gts)
+    return potsdamTest_loader
+
 
 
 

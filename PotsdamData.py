@@ -37,7 +37,7 @@ class Potsdam(VisionDataset):
         tensor = torch.stack((originTensor, flipTensor, jitterTensor), dim=0)
 
 
-        return  tensor#.to('cuda')
+        return  tensor.to('cuda')
 
 
     def __len__(self):
